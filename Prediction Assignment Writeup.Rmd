@@ -1,0 +1,118 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Atair Camargo"
+date: "24 de dezembro de 2017"
+output: html_document
+---
+## Introduction
+        Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+        In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Goals
+        The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. We may use any of the other variables to predict with. We should create a report describing how we built our model, how we used cross validation, what we think the expected out of sample error is, and why we made the choices you did.
+
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+#Setup
+if (Sys.getenv("JAVA_HOME")!="")
+Sys.setenv(JAVA_HOME="")
+set.seed(1)
+library(rJava)
+library("xlsx")
+library("psych")
+library("lubridate")
+library("timeline")
+library("ggplot2")
+library("knitr")
+library("caret")
+library("rpart")
+library("rpart.plot")
+library("randomForest")
+library("corrplot")
+library("e1071")
+```
+
+####Downloading data
+```{r, echo=TRUE}
+#assign files urls
+base.data.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+valid.data.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+#assign files names
+base.file <- "pml-training.csv"
+
+test.file <- "pml-testing.csv"
+
+#download the files
+if (!file.exists(base.file)){
+    download.file(base.data.url, base.file)
+}
+
+if (!file.exists(test.file)){
+    download.file(test.data.url, test.file)
+}
+
+```
+
+####Reading file
+```{r, echo=TRUE}
+#load data into tables
+base.data <- read.csv(file = "pml-training.csv", header = TRUE, sep = ",", na.strings=c("NA","#DIV/0!",""), stringsAsFactors = FALSE)
+test.data <- read.csv(file = "pml-testing.csv", header = TRUE, sep = ",",na.strings=c("NA","#DIV/0!",""), stringsAsFactors = FALSE)
+
+dim(base.data) ; dim(test.data)
+```
+
+####Data Processing
+
+        Train data set has 199622 observations and 20 variables. We will split the train data set into two data sets in order to check predictions.
+
+        Validation data set has 20 observations and 20 variables.
+        
+        In order to have more observations in test data set, partitioning will be executed.
+        
+        As the first 7 collumns are not related to the prediction, we will remove them.
+        
+```{r, echo=TRUE}
+#Reducing Data
+base.data <- base.data[, colSums(is.na(base.data)) == 0]
+
+base.data$classe <- as.factor(base.data$classe)
+
+base.data <- base.data[,-c(1,2,3,4,5,6,7)]
+
+p.base.data <- createDataPartition(y=base.data$classe, p=0.60, list=FALSE )
+
+train.data <- base.data[p.base.data,]
+
+test.data <- base.data[-p.base.data,]
+
+
+dim(train.data); dim(test.data)
+```
+###Data Prediction and Modeling 1
+```{r, echo=TRUE}
+train.pred <- rpart(classe ~ ., data = train.data, method="class", control = rpart.control(method = "cv", number = 10))
+rpart.plot(train.pred)
+```
+
+```{r}
+check.data <- predict(train.pred, test.data, type = "class")
+confusionMatrix(check.data, test.data$classe)
+```
+
+
+####Randon Forest
+```{r}
+df.rf <- randomForest(classe ~. , data = train.data, method = "class")
+
+df.rf.pred <- predict(df.rf, test.data, type = "class")
+confusionMatrix(df.rf.pred, test.data$classe)
+```
+###Conclusion
+
+        Results show that Random Forest has higher accuracy than Decision trees.
+
+
