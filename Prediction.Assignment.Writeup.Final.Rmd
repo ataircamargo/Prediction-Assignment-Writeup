@@ -1,0 +1,168 @@
+---
+title: "Prediction.Assignment.Writeup.Final"
+author: "Atair Camargo"
+date: "July, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+sessionInfo()
+.libPaths("C:/Temp/Data.Science/Library")
+```
+
+## Prediction Assignment Writeup
+
+### Background
+
+  Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Data
+
+  The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+  The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+### Downloading and assigning Data Files
+
+    Base and test data sets are downloaded and loaded into two files.
+    
+```{r}
+#Assign files' urls
+plm.train.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+plm.test.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+
+#assign files names
+train.file <- "pml-training.csv"
+
+test.file <- "pml-testing.csv"
+
+#download the files
+if (!file.exists(train.file)){
+    download.file(plm.train.url, train.file)
+}
+
+if (!file.exists(test.file)){
+    download.file(plm.test.url, test.file)
+}
+
+#load data into tables
+plm.train.data <- read.csv(file = "pml-training.csv", header = TRUE, sep = ",", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+plm.test.data <- read.csv(file = "pml-testing.csv", header = TRUE, sep = ",", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+dim(plm.train.data)
+dim(plm.test.data)
+```
+### Data Cleaning
+  Visualizing the data, it can be seen several NAs, so NAs will be removed from Data.Frame.
+
+```{r}
+# Remove NAs
+clean.plm.train.data <- plm.train.data[, which(colSums(is.na(plm.train.data)) == 0)]
+
+clean.plm.test.data <- plm.test.data[, which(colSums(is.na(plm.test.data)) == 0)]
+#Checking Reduction
+dim(clean.plm.train.data)
+dim(clean.plm.test.data)
+```
+### Data Transformation
+  It can be seen that the first 7 columns are not relevant to prediction, so they will be removed.
+```{r}
+#Remove columns
+final.plm.train.data <- clean.plm.train.data[,-c(1:7)]
+final.plm.test.data <- clean.plm.test.data[,-c(1:7)]
+dim(final.plm.train.data)
+dim(final.plm.test.data)
+```
+### Data Slicing
+  Data will be split in order to perform validation.
+  
+```{r warning=FALSE}
+library(caret)
+#Split 60% of the data
+plm.inTrain <- createDataPartition(y=final.plm.train.data$classe, p=0.60, list=FALSE )
+
+plm.train <- final.plm.train.data[plm.inTrain,]
+
+plm.valid <- final.plm.train.data[-plm.inTrain,]
+
+#Check data sets dimensions
+dim(plm.train)
+dim(plm.valid)
+dim(final.plm.test.data)
+```
+### Define Pre Process Method
+  Cross Validation and Principal Components Analysis
+  
+```{r}
+#Define Pre Process Method
+library("caret")
+control <- trainControl(method="cv", number=3, p = 0.75, classProbs = TRUE, preProcOptions= "pca", allowParallel=TRUE)
+``` 
+### Building Models
+  Modelling with Random Forest.
+    Checking hardware performance as well.
+
+```{r cache=TRUE, warning=FALSE}
+# Random Forest
+set.seed(2018)
+system.time(fit.td.rf <- train(classe~., data=plm.train, method="rf", metric = "ROC", maximize = TRUE, trControl=control))
+```
+
+  Modelling with boosted trees "GBM".
+
+```{r cache=TRUE, warning=FALSE}
+# GBM
+set.seed(2018)
+system.time(fit.td.gbm <- train(classe~., data=plm.train, method="gbm", metric = "ROC", maximize = TRUE, trControl=control, verbose = FALSE))
+```
+
+
+
+```{r cache=TRUE, warning=FALSE}
+# summarizing results
+set.seed(2018)
+results <- resamples(list(rf=fit.td.rf, gbm=fit.td.gbm))
+# Comparison Table
+summary(results)
+```
+
+
+
+
+```{r}
+# boxplot comparison
+bwplot(results)
+# Dot-plot comparison
+dotplot(results)
+```
+
+
+```{r}
+pred1 <- predict(fit.td.rf, plm.valid)
+confusionMatrix(plm.valid$classe, pred1)
+```
+
+
+
+```{r}
+pred2 <- predict(fit.td.gbm, plm.valid)
+confusionMatrix(plm.valid$classe, pred2)
+```
+### Result
+  Results show that the random forest model has the highest accuracy in cross validation. Therefore, it will be used for prediction.
+
+### Prediction
+Random forest model for prediction
+
+```{r}
+
+pred <- predict(fit.td.rf, newdata=final.plm.test.data)
+pred
+````
+
+
+
